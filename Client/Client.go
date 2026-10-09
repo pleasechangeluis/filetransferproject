@@ -22,15 +22,16 @@ func helpmenu() int{
 	fmt.Println("All commmands are case sensitive, so be careful when typing them in. \n Current commands are the following:")
 	fmt.Println("help - prints out text that lists out all commands and then describes each one.")
 	fmt.Println("exit - closes the program")
-	fmt.Println("login - will ask for a username and a password, if combination is valid, you be logged in as that user")
-	fmt.Println("logout - logs out of account if logged into one")
-	fmt.Println("createacc - will ask for a username and a password, will create an account with that information")
-	fmt.Println("viewlogin - prints out the user that is currently logged in")
-	fmt.Println("deleteacc - removes an account")
 	fmt.Println("connect - connects to the server given")
 	fmt.Println("disconnect - disconnects from currently connected server")
 	fmt.Println("browse - queries connected host for current files")
 	fmt.Println("downloadfile - will print all accessible files and then ask which file you'd like to download")
+	
+	fmt.Println("These commands need you to be connected to a server before being runnable")
+	fmt.Println("	login - will ask for a username and a password, if combination is valid, you be logged in as that user")
+	fmt.Println("	logout - logs out of account if logged into one")
+	fmt.Println("	createacc - will ask for a username and a password, will request connected server to create that account with that information")
+	fmt.Println("	viewlogin - prints out the user that is currently logged in")
 
 	return 1
 }
@@ -39,7 +40,7 @@ func cexit() int{
 	logged = ""
 	fmt.Println("clean")
 	fmt.Println("exit.")
-	_storing_accs()
+
 	
 
 	return 1
@@ -67,6 +68,13 @@ func connect() int{
 
 func browse() int {
 
+	if err := connScanner.Err(); err != nil {
+		fmt.Println("Server has closed")
+		conn = nil
+        connScanner = nil
+        connReader = nil
+		return 0
+	}
 	if conn == nil {
 		fmt.Println("Failed to browse (you arent connected to anything)")
 		return 1
@@ -75,27 +83,32 @@ func browse() int {
 	fmt.Fprintln(conn, "browse")	
 	
 	for connScanner.Scan(){
-
-		
 		text := connScanner.Text()
 
 		if text == "done" {
             break
         }
-
 		fmt.Printf("Command recivied: %v\n", text)
-
-		
 	}
 	
-	if err := connScanner.Err(); err != nil {
-		fmt.Fprintln(os.Stderr, "error reading:", err)
-	}
+	
 
 	return 1
 }
 
 func downfile() int{
+	if err := connScanner.Err(); err != nil {
+		fmt.Println("Server has closed")
+		conn = nil
+        connScanner = nil
+        connReader = nil
+		return 0
+	}
+	if conn == nil {
+		fmt.Println("Failed to download (you arent connected to anything)")
+		return 1
+	}
+
 	fmt.Fprintln(conn, "browse")	
 	filecounter := 0
 	for connScanner.Scan(){
@@ -110,6 +123,8 @@ func downfile() int{
 		filecounter += 1
 		
 	}
+	
+	
 	scanner := bufio.NewScanner(os.Stdin)
 	fmt.Println("Please select the file you'd like to download by typing their associated number. (Type 0 to cancel)")	
 	scanner.Scan()
@@ -178,90 +193,123 @@ func _filecheck(input string, cap int) bool {
 }
 
 func login() int {
-
-	if logged != ""{
-		fmt.Println("An account is already logged in!")
+	if err := connScanner.Err(); err != nil {
+		fmt.Println("Server has closed")
+		conn = nil
+        connScanner = nil
+        connReader = nil
+		return 0
+	}
+	if conn == nil {
+		fmt.Println("Failed to login (you arent connected to anything)")
 		return 1
 	}
+	fmt.Fprintln(conn, "login")
 
+	connScanner.Scan()
+	check := connScanner.Text()
+	if check != "proc" {
+        fmt.Println("Failed to login (you are already logged in)")
+		connScanner.Scan()
+		return 1
+    }
 	scanner := bufio.NewScanner(os.Stdin)
-	fmt.Println("Please enter a username")
+
+	
+	fmt.Println("Type your username")
 	scanner.Scan()
-	acctext := scanner.Text()
-	for !_logcheck(acctext) {
+	user := scanner.Text()
+	fmt.Fprintln(conn, user)
+
+	connScanner.Scan()
+	uresult := connScanner.Text()
+	for uresult == "not ok" {
 		fmt.Println("Invalid username, please try again")
 		scanner.Scan()
-		acctext = scanner.Text()
+		user = scanner.Text()
+		fmt.Fprintln(conn, user)
+		connScanner.Scan()
+		uresult = connScanner.Text()
 
 		if err := scanner.Err(); err != nil {
 			fmt.Fprintln(os.Stderr, "error reading:", err)
 		}
-		
 	}
-	username := acctext
-	fmt.Printf("Hello %v, please enter your password\n", username)
+	
+
+
+	fmt.Printf("Hello %v, please enter your password\n", user)
 	scanner.Scan()
-	acctext = scanner.Text()
-	for _passcheck(acctext, username){
+	pw := scanner.Text()
+	fmt.Fprintln(conn, pw)
+	
+	connScanner.Scan()
+	presult := connScanner.Text()
+	for presult == "not ok" {
 		fmt.Println("Invalid/Incorrect password, please try again")
 		scanner.Scan()
-		acctext = scanner.Text()
+		pw = scanner.Text()
+		fmt.Fprintln(conn, pw)
+		connScanner.Scan()
+		presult = connScanner.Text()
 
 		if err := scanner.Err(); err != nil {
 			fmt.Fprintln(os.Stderr, "error reading:", err)
 		}
-		fmt.Printf("result: %v\n", acctext)
 	}
-
+	
 	fmt.Println("You are now logged in!")
-	logged = username
+		
+	
+	connScanner.Scan()
+	//text := connScanner.Text()
+	//fmt.Printf("Command recivied: %v\n", text)
+
+	
+	
+
 	return 1
 }
 
-func _passcheck(input string, username string) bool {
-	if input == "" {
-		return false
-	}
-	return accounts[username] != input
-}
-
-func _logcheck(input string) bool {
-	if input == "" {
-		return false
-	}
-	for key := range accounts{
-		if key == input {
-			return true
-		}
-	}	
-	return false
-}
-
-func _account_making_check(input string) bool {
-	if input == "" {
-		return true
-	}
-	_, ok := accounts[input]
-
-	return ok
-}
-
 func cac() int {
+	if err := connScanner.Err(); err != nil {
+		fmt.Println("Server has closed")
+		conn = nil
+        connScanner = nil
+        connReader = nil
+		return 0
+	}
+
+	if conn == nil {
+		fmt.Println("Failed to create account (you arent connected to anything)")
+		return 1
+	}
+
+	fmt.Fprintln(conn, "createacc")
+
 	scanner := bufio.NewScanner(os.Stdin)
 	fmt.Println("Please enter your new username")
 	scanner.Scan()
 	acctext := scanner.Text()
-	for _account_making_check(acctext){
+	fmt.Fprintln(conn, acctext)
+
+	connScanner.Scan()
+	uresult := connScanner.Text()
+	for uresult == "not ok" {
 		fmt.Println("Invalid/Already in use username, please try again")
 		scanner.Scan()
 		acctext = scanner.Text()
+		fmt.Fprintln(conn, acctext)
+		connScanner.Scan()
+		uresult = connScanner.Text()
 
 		if err := scanner.Err(); err != nil {
 			fmt.Fprintln(os.Stderr, "error reading:", err)
 		}
 	}
-	username := acctext
-	fmt.Printf("Hello %v, please enter what you'd like your password to be\n", username)
+	
+
+	fmt.Printf("Hello %v, please enter what you'd like your password to be\n", acctext)
 	scanner.Scan()
 	acctext = scanner.Text()
 	for acctext == ""{
@@ -273,64 +321,85 @@ func cac() int {
 			fmt.Fprintln(os.Stderr, "error reading:", err)
 		}
 	}
-	password := acctext
-	accounts[username] = password
-	fmt.Println("Account created!")
+	fmt.Fprintln(conn, acctext)
+	fmt.Println("Your account has been sent to the server, wait to be accepted")
+
+
+	connScanner.Scan()
+	//text := connScanner.Text()
+	//fmt.Printf("Command recivied: %v\n", text)
+
+	
+	
+
 
 	return 1;
 }
 
 func vlogin() int {
-	if logged != ""{
-		fmt.Printf("The user currently logged in is: %v\n", logged)
-	} else {
-		fmt.Println("No user is currently logged in.")
+	if conn == nil {
+		fmt.Println("Failed to login (you arent connected to anything)")
+		return 1
 	}
+	fmt.Fprintln(conn, "viewlogin")
+
+	connScanner.Scan()
+	check := connScanner.Text()
+	if check != "ok" {
+		fmt.Println("No user is currently logged in")
+		connScanner.Scan()
+		text := connScanner.Text()
+		fmt.Printf("Command recivied: %v\n", text)
+		return 1
+	}
+
+	connScanner.Scan()
+	logged := connScanner.Text()
+	fmt.Printf("The user currently logged in is: %v\n", logged)
+
+	connScanner.Scan()
+	//text := connScanner.Text()
+	//fmt.Printf("Command recivied: %v\n", text)
 	return 1
 }
 
 func logo() int {
-	if logged != ""{
-		fmt.Printf("%v has been logged out\n", logged)
-		logged = ""
-	} else {
-		fmt.Println("No user is currently logged in.")
+	if conn == nil {
+		fmt.Println("Failed to logout (you arent connected to anything)")
+		return 1
 	}
+	fmt.Fprintln(conn, "logout")
+
+	connScanner.Scan()
+	check := connScanner.Text()
+	if check != "ok" {
+		fmt.Println("No user is currently logged in")
+		connScanner.Scan()
+		text := connScanner.Text()
+		fmt.Printf("Command recivied: %v\n", text)
+		return 1
+	}
+
+
+	connScanner.Scan()
+	logged := connScanner.Text()
+	fmt.Printf("%v\n", logged)
+
+	connScanner.Scan()
+	
 	return 1
 }
 
-func delacc() int {
-	scanner := bufio.NewScanner(os.Stdin)
-	fmt.Println("Please enter the username of the account you want to delete")
-	scanner.Scan()
-	acctext := scanner.Text()
-	for !_logcheck(acctext) {
-		fmt.Println("Invalid username, please try again")
-		scanner.Scan()
-		acctext = scanner.Text()
-
-		if err := scanner.Err(); err != nil {
-			fmt.Fprintln(os.Stderr, "error reading:", err)
-		}
-		
+func discon() int {
+	if conn == nil {
+		fmt.Println("You don't have a connection to close!");
+		return 1
 	}
-	username := acctext
-	fmt.Printf("Hello %v, please enter the account's password\n", username)
-	scanner.Scan()
-	acctext = scanner.Text()
-	for _passcheck(acctext, username){
-		fmt.Println("Invalid/Incorrect password, please try again")
-		scanner.Scan()
-		acctext = scanner.Text()
-
-		if err := scanner.Err(); err != nil {
-			fmt.Fprintln(os.Stderr, "error reading:", err)
-		}
-		fmt.Printf("result: %v\n", acctext)
-	}
-
-	delete(accounts, username)
-
+	conn.Close()
+	conn = nil
+	connReader = nil
+	connScanner = nil
+	fmt.Println("Disconnected from server.")
 	return 1
 }
 
@@ -356,6 +425,7 @@ func main() {
 		if err := scanner.Err(); err != nil {
 			fmt.Fprintln(os.Stderr, "error reading:", err)
 		}
+		fmt.Print("Type your command:")
 	}
 }
 
@@ -370,8 +440,8 @@ func greating(cmds *map[string]execFunc, accounts *map[string]string) {
 	(*cmds)["createacc"] = cac
 	(*cmds)["viewlogin"] = vlogin
 	(*cmds)["logout"] = logo
-	(*cmds)["deleteacc"] = delacc
 	(*cmds)["connect"] = connect
+	(*cmds)["disconnect"] = discon
 	(*cmds)["browse"] = browse
 	(*cmds)["downloadfile"] = downfile
 	_loading_accs(accounts)
